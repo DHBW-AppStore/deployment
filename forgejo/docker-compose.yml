@@ -1,0 +1,102 @@
+# Local Forgejo for Phase 1: prove the staging workflow runs under Forgejo
+# Actions before spending any OpenStack quota. Everything here is disposable —
+# `docker compose down -v` and starting over costs nothing.
+#
+# ROOT_URL uses the hostname `forgejo` rather than localhost on purpose. Job
+# containers spawned by the runner join this same network and resolve
+# `forgejo:3000`, while your browser resolves it through the /etc/hosts entry
+# from README.md. A localhost ROOT_URL would break actions/checkout inside the
+# job container, because localhost there is the container itself.
+
+name: forgejo
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: forgejo
+      POSTGRES_PASSWORD: ${FORGEJO_DB_PASSWORD:?set FORGEJO_DB_PASSWORD in .env}
+      POSTGRES_DB: forgejo
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks: [forgejo]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forgejo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:11
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      FORGEJO__database__DB_TYPE: postgres
+      FORGEJO__database__HOST: db:5432
+      FORGEJO__database__NAME: forgejo
+      FORGEJO__database__USER: forgejo
+      FORGEJO__database__PASSWD: ${FORGEJO_DB_PASSWORD}
+      FORGEJO__server__DOMAIN: ${FORGEJO_DOMAIN:-forgejo}
+      FORGEJO__server__ROOT_URL: ${FORGEJO_ROOT_URL:-http://forgejo:3000/}
+      FORGEJO__server__SSH_PORT: "2222"
+      # Single-team instance — nobody self-registers.
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__actions__ENABLED: "true"
+      # actions/checkout and friends are fetched from github.com; Forgejo has
+      # no marketplace of its own.
+      FORGEJO__actions__DEFAULT_ACTIONS_URL: https://github.com
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    volumes:
+      - forgejo-data:/data
+    networks: [forgejo]
+
+  runner:
+    image: code.forgejo.org/forgejo/runner:6
+    restart: unless-stopped
+    depends_on: [forgejo]
+    # The image runs as uid 1000, but Docker Desktop exposes the socket as
+    # root:root 0660 — so the daemon cannot open it. Running the runner as root
+    # is the standard workaround for socket-mounting runners on macOS.
+    # On the Phase 2 Linux VM, prefer adding the runner user to the `docker`
+    # group (group_add) over running as root.
+    user: "0:0"
+    environment:
+      FORGEJO_INSTANCE_URL: http://forgejo:3000
+      # No :? guard here — Compose interpolates every service before selecting
+      # which ones to start, so a guard on the runner also blocks
+      # `up -d db forgejo`. entrypoint.sh checks the token instead, where it can
+      # give an error that says what to do about it.
+      FORGEJO_RUNNER_TOKEN: ${FORGEJO_RUNNER_TOKEN:-}
+      RUNNER_NAME: local-deploy
+      RUNNER_LABELS: deploy:docker://forgejo-deploy-job:latest
+    volumes:
+      - runner-data:/data
+      - ./runner/config.yml:/data/config.yml:ro
+      - ./runner/entrypoint.sh:/entrypoint.sh:ro
+      # The runner does not execute jobs itself — it asks the host's Docker to
+      # start a job container per run.
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /data
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    networks: [forgejo]
+
+networks:
+  forgejo:
+    # Named explicitly so runner/config.yml's container.network does not depend
+    # on the compose project name.
+    name: forgejo
+
+volumes:
+  db-data:
+  forgejo-data:
+  runner-data:
+  # Survives job containers; see the note in runner/config.yml.
+  tf-state:
+    name: tf-state

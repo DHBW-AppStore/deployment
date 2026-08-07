@@ -1,0 +1,31 @@
+log:
+  level: info
+
+runner:
+  file: /data/.runner
+  # One deploy at a time. The staging backend is a *local* tfstate file with no
+  # locking, so two concurrent runs would corrupt it.
+  capacity: 1
+  timeout: 1h
+  # Must match RUNNER_LABELS in docker-compose.yml. `deploy` is what the
+  # workflow's `runs-on:` selects; everything after `docker://` is the image
+  # jobs execute inside.
+  labels:
+    - "deploy:docker://forgejo-deploy-job:latest"
+
+cache:
+  enabled: true
+
+container:
+  # Job containers join Forgejo's network so `forgejo:3000` resolves inside
+  # them. Without this, actions/checkout cannot reach the instance.
+  network: forgejo
+  privileged: false
+  # infrastructure/terraform/envs/staging/backend.tf writes state to the
+  # absolute path /var/lib/tf-state/staging/terraform.tfstate. Job containers
+  # are destroyed after every run, so without this named volume the state —
+  # and with it any ability to manage the existing VM — is lost each time.
+  # This is the same trap as `act` without --bind.
+  options: -v tf-state:/var/lib/tf-state
+  valid_volumes:
+    - tf-state
