@@ -21,11 +21,7 @@ container:
   # them. Without this, actions/checkout cannot reach the instance.
   network: forgejo
   privileged: false
-  # infrastructure/terraform/envs/staging/backend.tf writes state to the
-  # absolute path /var/lib/tf-state/staging/terraform.tfstate. Job containers
-  # are destroyed after every run, so without this named volume the state —
-  # and with it any ability to manage the existing VM — is lost each time.
-  # This is the same trap as `act` without --bind.
-  options: -v tf-state:/var/lib/tf-state
-  valid_volumes:
-    - tf-state
+  # No tfstate volume: envs/staging/backend.tf now uses the pg backend, so
+  # state lives in the `terraform_state` database on this stack's Postgres
+  # rather than on the runner's disk. Job containers stay disposable.
+  valid_volumes: []

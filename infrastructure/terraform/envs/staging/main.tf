@@ -3,7 +3,11 @@
 module "vm" {
   source = "../../modules/openstack_vm"
 
-  name         = "staging-docker"
+  # Renamed from "staging-docker": this OpenStack tenant is shared with the
+  # upstream six7-click-n-deploy project, whose pipeline manages a VM of that
+  # name. The module derives the keypair as "${name}-key", so a shared name
+  # collides on both the instance and the keypair.
+  name         = "staging-dhbw-appstore"
   image        = "Ubuntu 22.04"
   flavor       = "gp1.large"
   public_key   = var.ssh_public_key

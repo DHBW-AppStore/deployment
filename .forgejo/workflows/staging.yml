@@ -41,6 +41,10 @@ jobs:
       OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.STAGING_OS_APPLICATION_CREDENTIAL_ID }}
       OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.STAGING_OS_APPLICATION_CREDENTIAL_SECRET }}
       OS_REGION_NAME: ${{ secrets.STAGING_OS_REGION_NAME }}
+      # Read by the pg backend in envs/staging/backend.tf. Passed via the
+      # environment so the password never appears in a .tf file or in the
+      # terraform init command line.
+      PG_CONN_STR: ${{ secrets.PG_CONN_STR }}
       # Overrides roles_path from infrastructure/ansible/ansible.cfg so the
       # roles baked into the image are found without a galaxy install.
       ANSIBLE_ROLES_PATH: /opt/ansible-roles
