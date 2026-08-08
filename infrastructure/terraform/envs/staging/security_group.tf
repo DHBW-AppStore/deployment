@@ -1,0 +1,97 @@
+# Security group for the staging VM.
+#
+# Previously this was referenced by name only ("appstore-deploy") and had to be
+# created by hand in the tenant — an undocumented prerequisite that made a fresh
+# apply fail with a confusing "security group not found". Creating it here makes
+# the environment self-contained.
+#
+# WHAT IS DELIBERATELY NOT OPENED
+# docker-compose.staging.yml publishes Postgres (5432), RabbitMQ (5672) and the
+# RabbitMQ management UI (15672) on the host. The VM's fixed IP is publicly
+# routable on this OpenStack (see infrastructure/README.md), so this security
+# group is the ONLY thing keeping those services off the internet. Do not add
+# rules for them — use an SSH tunnel if you need access.
+
+resource "openstack_networking_secgroup_v2" "appstore_deploy" {
+  # Named after the VM rather than the generic "appstore-deploy" for the same
+  # reason the VM was renamed: this tenant is shared with upstream
+  # six7-click-n-deploy, and OpenStack does not enforce unique security-group
+  # names. Two groups called "appstore-deploy" would make name-based lookup
+  # ambiguous.
+  name        = "staging-dhbw-appstore-sg"
+  description = "Staging Docker host: SSH for Ansible, HTTP/HTTPS for the app"
+
+  # delete_default_rules stays false, so the group keeps OpenStack's default
+  # allow-all egress. The VM needs outbound access for apt, GHCR and Galaxy.
+}
+
+resource "openstack_networking_secgroup_rule_v2" "ssh" {
+  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 22
+  port_range_max    = 22
+  remote_ip_prefix  = var.ssh_source_cidr_ipv4
+  description       = "SSH for the Ansible deploy step (campus IPv4)"
+}
+
+# OpenStack security-group rules are per-ethertype: the IPv4 rules in this file
+# do not filter IPv6 traffic at all. Without this rule, an IPv6-reachable VM
+# would have port 22 governed by nothing here.
+resource "openstack_networking_secgroup_rule_v2" "ssh_v6" {
+  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  direction         = "ingress"
+  ethertype         = "IPv6"
+  protocol          = "tcp"
+  port_range_min    = 22
+  port_range_max    = 22
+  remote_ip_prefix  = var.ssh_source_cidr_ipv6
+  description       = "SSH for the Ansible deploy step (campus IPv6)"
+}
+
+resource "openstack_networking_secgroup_rule_v2" "http" {
+  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 80
+  port_range_max    = 80
+  remote_ip_prefix  = "0.0.0.0/0"
+  description       = "HTTP - nginx redirects to HTTPS"
+}
+
+resource "openstack_networking_secgroup_rule_v2" "https" {
+  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 443
+  port_range_max    = 443
+  remote_ip_prefix  = "0.0.0.0/0"
+  description       = "HTTPS - the application"
+}
+
+# The application is meant to be publicly reachable, so 80/443 stay open to
+# everyone on both ethertypes. Only SSH is campus-restricted.
+resource "openstack_networking_secgroup_rule_v2" "http_v6" {
+  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  direction         = "ingress"
+  ethertype         = "IPv6"
+  protocol          = "tcp"
+  port_range_min    = 80
+  port_range_max    = 80
+  remote_ip_prefix  = "::/0"
+  description       = "HTTP - nginx redirects to HTTPS (IPv6)"
+}
+
+resource "openstack_networking_secgroup_rule_v2" "https_v6" {
+  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  direction         = "ingress"
+  ethertype         = "IPv6"
+  protocol          = "tcp"
+  port_range_min    = 443
+  port_range_max    = 443
+  remote_ip_prefix  = "::/0"
+  description       = "HTTPS - the application (IPv6)"
+}

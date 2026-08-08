@@ -19,7 +19,9 @@ module "vm" {
   # floating_ip_pool when a routable pool is available.
   assign_floating_ip = false
 
-  security_groups = ["default", "appstore-deploy"]
+  # Referencing the resource rather than a bare name gives Terraform the
+  # dependency, so the group and its rules exist before the instance is built.
+  security_groups = ["default", openstack_networking_secgroup_v2.appstore_deploy.name]
 
   docker_data_volume_size_gb = 0
 
