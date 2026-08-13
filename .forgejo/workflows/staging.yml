@@ -125,16 +125,21 @@ jobs:
         if: github.event.inputs.mode == 'apply'
         working-directory: infrastructure/ansible
         run: |
-          # An IPv6 literal has to be bracketed in an ini inventory; an IPv4
-          # address must not be. vm_ip returns whichever family connect_via
-          # selected, so decide from the value rather than hardcoding either.
-          case "$VM_IP" in
-            *:*) HOST="[${VM_IP}]" ;;
-            *)   HOST="${VM_IP}" ;;
-          esac
+          # Empty here means terraform produced no output, and ansible-playbook
+          # would still exit 0 with "no hosts matched" - a green run that
+          # deployed nothing.
+          if [ -z "$VM_IP" ]; then
+            echo "VM_IP is empty - terraform output produced nothing" >&2
+            exit 1
+          fi
+          # The address goes in ansible_host behind an alias rather than being
+          # the host name itself. Brackets around an IPv6 literal do not work:
+          # the ini plugin reads [...] as a host range pattern and fails with
+          # "host range must be begin:end". An alias sidesteps the question and
+          # is identical for IPv4 and IPv6.
           cat > inventory.ini <<EOF
           [docker_vm]
-          ${HOST} ansible_user=ubuntu
+          staging ansible_host=${VM_IP} ansible_user=ubuntu
           EOF
           echo "Inventory:" && cat inventory.ini
 

@@ -47,6 +47,7 @@ RUN python3 -m venv /opt/ansible \
           /opt/ansible/bin/ansible-playbook \
           /opt/ansible/bin/ansible-galaxy \
           /opt/ansible/bin/ansible-config \
+          /opt/ansible/bin/ansible-inventory \
           /usr/local/bin/
 
 # Galaxy dependencies baked in.

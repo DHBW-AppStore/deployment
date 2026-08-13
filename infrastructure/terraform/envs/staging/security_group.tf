@@ -81,6 +81,21 @@ resource "openstack_networking_secgroup_rule_v2" "http_v6" {
   description       = "HTTP - redirected to HTTPS, and the ACME challenge (IPv6)"
 }
 
+# ICMPv6 is not optional the way ICMP is on IPv4: Path MTU Discovery relies on
+# "Packet Too Big" messages, and blocking them creates MTU black holes where a
+# connection establishes but larger transfers hang - a TLS handshake that
+# succeeds while the response never arrives. RFC 4890 advises against filtering
+# ICMPv6 wholesale. It also makes the host pingable, which is worth something
+# when the only way in is IPv6.
+resource "openstack_networking_secgroup_rule_v2" "icmpv6" {
+  security_group_id = openstack_networking_secgroup_v2.appstore_vm.id
+  direction         = "ingress"
+  ethertype         = "IPv6"
+  protocol          = "ipv6-icmp"
+  remote_ip_prefix  = "::/0"
+  description       = "ICMPv6 - required for Path MTU Discovery (RFC 4890)"
+}
+
 resource "openstack_networking_secgroup_rule_v2" "https_v6" {
   security_group_id = openstack_networking_secgroup_v2.appstore_vm.id
   direction         = "ingress"
