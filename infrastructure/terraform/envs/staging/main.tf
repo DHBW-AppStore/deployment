@@ -3,25 +3,17 @@
 module "vm" {
   source = "../../modules/openstack_vm"
 
-  # Renamed from "staging-docker": this OpenStack tenant is shared with the
-  # upstream six7-click-n-deploy project, whose pipeline manages a VM of that
-  # name. The module derives the keypair as "${name}-key", so a shared name
-  # collides on both the instance and the keypair.
-  name         = "staging-dhbw-appstore"
-  image        = "Ubuntu 22.04"
-  flavor       = "gp1.large"
-  public_key   = var.ssh_public_key
-  network_name = "DHBW"
+  name       = "staging-dhbw-appstore"
+  image      = "Ubuntu 22.04"
+  flavor     = "gp1.large"
+  public_key = var.ssh_public_key
 
-  # No public floating-IP pool is usable from off-campus on this OpenStack;
-  # deploy reaches the VM via its fixed IP on the network (requires the
-  # operator to be in the network / a full-tunnel VPN). Flip to true and set
-  # floating_ip_pool when a routable pool is available.
-  assign_floating_ip = false
+  network_name = "DHBWV6"
+  connect_via  = "fixed_ipv6"
 
   # Referencing the resource rather than a bare name gives Terraform the
   # dependency, so the group and its rules exist before the instance is built.
-  security_groups = ["default", openstack_networking_secgroup_v2.appstore_deploy.name]
+  security_groups = ["default", openstack_networking_secgroup_v2.appstore_vm.name]
 
   docker_data_volume_size_gb = 0
 

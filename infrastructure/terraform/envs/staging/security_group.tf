@@ -12,12 +12,8 @@
 # group is the ONLY thing keeping those services off the internet. Do not add
 # rules for them — use an SSH tunnel if you need access.
 
-resource "openstack_networking_secgroup_v2" "appstore_deploy" {
-  # Named after the VM rather than the generic "appstore-deploy" for the same
-  # reason the VM was renamed: this tenant is shared with upstream
-  # six7-click-n-deploy, and OpenStack does not enforce unique security-group
-  # names. Two groups called "appstore-deploy" would make name-based lookup
-  # ambiguous.
+resource "openstack_networking_secgroup_v2" "appstore_vm" {
+  # We enforce a unique security-group for this vm
   name        = "staging-dhbw-appstore-sg"
   description = "Staging Docker host: SSH for Ansible, HTTP/HTTPS for the app"
 
@@ -26,7 +22,7 @@ resource "openstack_networking_secgroup_v2" "appstore_deploy" {
 }
 
 resource "openstack_networking_secgroup_rule_v2" "ssh" {
-  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  security_group_id = openstack_networking_secgroup_v2.appstore_vm.id
   direction         = "ingress"
   ethertype         = "IPv4"
   protocol          = "tcp"
@@ -40,7 +36,7 @@ resource "openstack_networking_secgroup_rule_v2" "ssh" {
 # do not filter IPv6 traffic at all. Without this rule, an IPv6-reachable VM
 # would have port 22 governed by nothing here.
 resource "openstack_networking_secgroup_rule_v2" "ssh_v6" {
-  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  security_group_id = openstack_networking_secgroup_v2.appstore_vm.id
   direction         = "ingress"
   ethertype         = "IPv6"
   protocol          = "tcp"
@@ -51,7 +47,7 @@ resource "openstack_networking_secgroup_rule_v2" "ssh_v6" {
 }
 
 resource "openstack_networking_secgroup_rule_v2" "http" {
-  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  security_group_id = openstack_networking_secgroup_v2.appstore_vm.id
   direction         = "ingress"
   ethertype         = "IPv4"
   protocol          = "tcp"
@@ -62,7 +58,7 @@ resource "openstack_networking_secgroup_rule_v2" "http" {
 }
 
 resource "openstack_networking_secgroup_rule_v2" "https" {
-  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  security_group_id = openstack_networking_secgroup_v2.appstore_vm.id
   direction         = "ingress"
   ethertype         = "IPv4"
   protocol          = "tcp"
@@ -75,7 +71,7 @@ resource "openstack_networking_secgroup_rule_v2" "https" {
 # The application is meant to be publicly reachable, so 80/443 stay open to
 # everyone on both ethertypes. Only SSH is campus-restricted.
 resource "openstack_networking_secgroup_rule_v2" "http_v6" {
-  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  security_group_id = openstack_networking_secgroup_v2.appstore_vm.id
   direction         = "ingress"
   ethertype         = "IPv6"
   protocol          = "tcp"
@@ -86,7 +82,7 @@ resource "openstack_networking_secgroup_rule_v2" "http_v6" {
 }
 
 resource "openstack_networking_secgroup_rule_v2" "https_v6" {
-  security_group_id = openstack_networking_secgroup_v2.appstore_deploy.id
+  security_group_id = openstack_networking_secgroup_v2.appstore_vm.id
   direction         = "ingress"
   ethertype         = "IPv6"
   protocol          = "tcp"

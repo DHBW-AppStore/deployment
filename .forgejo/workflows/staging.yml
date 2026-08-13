@@ -125,9 +125,16 @@ jobs:
         if: github.event.inputs.mode == 'apply'
         working-directory: infrastructure/ansible
         run: |
+          # An IPv6 literal has to be bracketed in an ini inventory; an IPv4
+          # address must not be. vm_ip returns whichever family connect_via
+          # selected, so decide from the value rather than hardcoding either.
+          case "$VM_IP" in
+            *:*) HOST="[${VM_IP}]" ;;
+            *)   HOST="${VM_IP}" ;;
+          esac
           cat > inventory.ini <<EOF
           [docker_vm]
-          ${VM_IP} ansible_user=ubuntu
+          ${HOST} ansible_user=ubuntu
           EOF
           echo "Inventory:" && cat inventory.ini
 

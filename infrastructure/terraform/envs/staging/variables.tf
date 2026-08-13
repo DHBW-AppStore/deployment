@@ -24,13 +24,21 @@ variable "ssh_source_cidr_ipv4" {
   }
 }
 
+# 2001:7c0:1b20::/48 is the campus allocation (registered to DHBW Mannheim in
+# RIPE). The previous value, 2001:7c0:1b20:c913::/64, is the allocation pool of
+# the DHBWV6 network itself — the range VMs draw their own addresses from, not
+# the range an operator connects in from. With the runner on a laptop, that
+# value blocks the Ansible step.
+#
+# Narrow it back to that /64 in Phase 2, once the runner is a VM in this tenant:
+# then only the runner may reach port 22, which is tighter than campus-wide.
 variable "ssh_source_cidr_ipv6" {
   description = "IPv6 range allowed to reach port 22 (DHBW campus)."
   type        = string
-  default     = "2001:7c0:1b20:c913::/64"
+  default     = "2001:7c0:1b20::/48"
 
   validation {
     condition     = can(cidrhost(var.ssh_source_cidr_ipv6, 0))
-    error_message = "ssh_source_cidr_ipv6 must be a valid IPv6 CIDR, e.g. 2001:7c0:1b20:c913::/64."
+    error_message = "ssh_source_cidr_ipv6 must be a valid IPv6 CIDR, e.g. 2001:7c0:1b20::/48."
   }
 }
