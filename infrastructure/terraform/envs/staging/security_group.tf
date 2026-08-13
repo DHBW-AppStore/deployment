@@ -54,7 +54,7 @@ resource "openstack_networking_secgroup_rule_v2" "http" {
   port_range_min    = 80
   port_range_max    = 80
   remote_ip_prefix  = "0.0.0.0/0"
-  description       = "HTTP - nginx redirects to HTTPS"
+  description       = "HTTP - redirected to HTTPS, and the ACME challenge"
 }
 
 resource "openstack_networking_secgroup_rule_v2" "https" {
@@ -78,7 +78,7 @@ resource "openstack_networking_secgroup_rule_v2" "http_v6" {
   port_range_min    = 80
   port_range_max    = 80
   remote_ip_prefix  = "::/0"
-  description       = "HTTP - nginx redirects to HTTPS (IPv6)"
+  description       = "HTTP - redirected to HTTPS, and the ACME challenge (IPv6)"
 }
 
 resource "openstack_networking_secgroup_rule_v2" "https_v6" {
