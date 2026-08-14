@@ -119,6 +119,23 @@
         path: /root/.docker/config.json
         state: absent
 
+    # Validiert die zusammengesetzte Konfiguration, bevor das Modul übernimmt.
+    # Der Schritt existiert nur wegen der Diagnose: docker_compose_v2 ruft
+    # `compose images --format json` auf und liest ausschließlich stdout.
+    # Bricht Compose ab — etwa weil eine ${VAR:?...}-Pflichtvariable in der .env
+    # fehlt — steht die Erklärung auf stderr, stdout bleibt leer, und das Modul
+    # meldet stattdessen "Expecting value: line 1 column 1 (char 0)". Diese
+    # Meldung sagt nichts über die Ursache und hat schon einmal eine ganze
+    # Fehlersuche in die falsche Richtung geschickt.
+    #
+    # `config -q` interpoliert dieselbe Datei, gibt bei Erfolg nichts aus und
+    # nennt im Fehlerfall die betroffene Variable — Ansible zeigt stderr an.
+    - name: Compose-Konfiguration validieren
+      ansible.builtin.command:
+        cmd: docker compose -f docker-compose.staging.yml config -q
+        chdir: "{{ project_root }}"
+      changed_when: false
+
     - name: Start the application with Docker Compose
       community.docker.docker_compose_v2:
         project_src: "{{ project_root }}"
