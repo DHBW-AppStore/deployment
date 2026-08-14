@@ -31,6 +31,16 @@ on:
         options: [plan, apply]
         default: plan
         required: true
+      # Off by default because a deploy should not touch application data.
+      # The realm export only brings the backend's service account, so a fresh
+      # stack has no one to log in as - this is how the seed users, courses and
+      # apps get created. The script is idempotent, so re-running it is the
+      # usual answer to seed problems rather than something to avoid.
+      seed:
+        description: "also create the seed users, courses and apps"
+        type: boolean
+        default: false
+        required: false
 
 jobs:
   deploy:
@@ -147,8 +157,13 @@ jobs:
         if: github.event.inputs.mode == 'apply'
         working-directory: infrastructure/ansible
         run: |
+          # The input arrives as the string "true"/"false", so the playbook
+          # runs it through the bool filter - "false" is a non-empty string and
+          # would otherwise be truthy.
           ansible-playbook -i inventory.ini \
-            --private-key ~/.ssh/openstack-key staging.yml
+            --private-key ~/.ssh/openstack-key \
+            -e seed_data=${{ github.event.inputs.seed }} \
+            staging.yml
         env:
           ANSIBLE_HOST_KEY_CHECKING: 'False'
           ANSIBLE_FORCE_COLOR: 'True'

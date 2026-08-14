@@ -9,6 +9,10 @@
     docker_install_compose: true
     project_root: "/home/ubuntu/app"
     local_compose_path: "{{ playbook_dir }}/../../"
+    # Vom Workflow über -e gesetzt. Der Default gilt, wenn das Playbook von
+    # Hand läuft: ein Deploy fasst keine Anwendungsdaten an, solange es nicht
+    # ausdrücklich verlangt wird.
+    seed_data: false
 
   pre_tasks:
     - name: Verzeichnis für App erstellen
@@ -209,6 +213,45 @@
       ansible.builtin.command: docker exec backend-prod python -m alembic upgrade head
       register: migration_result
       changed_when: "'Running upgrade' in migration_result.stdout"
+
+    # Seeding läuft nach den Migrationen, weil das Skript in die Tabellen
+    # schreibt, die dort erst entstehen. Es legt Keycloak-Benutzer an (Profs,
+    # Studierende, ein Admin — alle mit Passwort 1234) und füllt Kurse, Apps
+    # und Freigaben in der Datenbank.
+    - name: Seed-Skript und Beschreibungen in den Backend-Container kopieren
+      ansible.builtin.command:
+        cmd: >-
+          docker compose -f docker-compose.staging.yml
+          cp {{ item.src }} backend:{{ item.dest }}
+        chdir: "{{ project_root }}"
+      loop:
+        - { src: "./seed/seed_data.py", dest: "/tmp/seed_data.py" }
+        - { src: "./seed/app_descriptions", dest: "/tmp/app_descriptions" }
+        - { src: "./keycloak/realm-export.json", dest: "/tmp/realm-export.json" }
+      when: seed_data | bool
+
+    # Die .env wird in der Rezept-Shell gelesen, statt die Werte über Ansible
+    # zu reichen: so stehen die Admin-Zugangsdaten nur in der Umgebung des
+    # docker-Aufrufs und nicht im Playbook-Protokoll. Ohne sie meldet Keycloak
+    # dem Skript ein 401.
+    - name: Seed ausführen
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          set -a; . ./.env; set +a
+          if [ -z "${KEYCLOAK_ADMIN_USER:-}" ] || [ -z "${KEYCLOAK_ADMIN_PASSWORD:-}" ]; then
+            echo "KEYCLOAK_ADMIN_USER / KEYCLOAK_ADMIN_PASSWORD fehlen in der .env" >&2
+            exit 1
+          fi
+          docker compose -f docker-compose.staging.yml exec -T \
+            -e KEYCLOAK_ADMIN_USER="$KEYCLOAK_ADMIN_USER" \
+            -e KEYCLOAK_ADMIN_PASSWORD="$KEYCLOAK_ADMIN_PASSWORD" \
+            -e REALM_EXPORT_PATH=/tmp/realm-export.json \
+            backend python /tmp/seed_data.py
+        executable: /bin/bash
+        chdir: "{{ project_root }}"
+      when: seed_data | bool
+      changed_when: true
 
     # Der Caddyfile ist bind-gemountet, Compose bemerkt eine inhaltliche
     # Änderung daran also nicht. Dieser Reload übernimmt sie. Caddy prüft die
