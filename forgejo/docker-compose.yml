@@ -92,6 +92,18 @@ networks:
     # Named explicitly so runner/config.yml's container.network does not depend
     # on the compose project name.
     name: forgejo
+    # Without this, job containers cannot reach an IPv6-only host at all: SSH
+    # fails with "Network is unreachable" before leaving the machine, which is
+    # how the first Ansible run against the staging VM died.
+    #
+    # The containers still get no IPv6 address of their own - Docker Desktop
+    # proxies the connection on the host side, where IPv6 and the VPN route
+    # exist. The flag is what makes it permit IPv6 egress at all. The subnet is
+    # a random ULA per RFC 4193 and is never routed anywhere.
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd69:5d8a:92ef:1::/64
 
 volumes:
   db-data:
