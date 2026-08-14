@@ -18,6 +18,22 @@
 }
 
 {$APP_HOSTNAME} {
+	# dns-01 rather than an inbound challenge: this host is reachable only over
+	# IPv6, and the CA cannot reach it - its endpoint has no AAAA record, and
+	# both http-01 and tls-alpn-01 failed here. Caddy writes the TXT record
+	# itself over RFC 2136, so nothing has to reach us.
+	#
+	# Needs the rfc2136 module, which is why this image is built rather than
+	# pulled - see Dockerfile.
+	tls {
+		dns rfc2136 {
+			key_name {$DNS_TSIG_KEY_NAME}
+			key_alg {$DNS_TSIG_KEY_ALG}
+			key {$DNS_TSIG_KEY}
+			server {$DNS_SERVER}
+		}
+	}
+
 	# handle_path strips the prefix before proxying, which is what nginx's
 	# `rewrite ^/api/(.*) /$1 break` did.
 	handle_path /api/* {

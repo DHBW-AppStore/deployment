@@ -8,6 +8,18 @@ module "vm" {
   flavor     = "gp1.large"
   public_key = var.ssh_public_key
 
+  # IPv6 works here only because the certificate is obtained over dns-01.
+  # The CA cannot reach this host inbound: its own endpoint has no AAAA record,
+  # and both inbound challenge types failed against DHBWV6:
+  #
+  #   http-01      "Could not fetch URL: http://.../.well-known/acme-challenge/..."
+  #   tls-alpn-01  "Unable to retrieve server certificate for ..."
+  #
+  # dns-01 needs no inbound connection at all: Caddy writes a TXT record over
+  # RFC 2136 and the CA reads it from DNS. See caddy/Caddyfile.
+  #
+  # Reachability itself was never the issue - a host outside the DHBW network
+  # reached this VM over IPv6 on both 80 and 443.
   network_name = "DHBWV6"
   connect_via  = "fixed_ipv6"
 

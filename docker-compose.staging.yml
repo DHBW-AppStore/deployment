@@ -384,12 +384,23 @@ services:
   # itself. Port 80 must stay open for the ACME HTTP-01 challenge.
   # ----------------------------------------------------------------
   caddy:
-    image: caddy:2-alpine
+    # Built rather than pulled: the stock image has no DNS provider modules,
+    # and dns-01 is the only challenge type that works for an IPv6-only host
+    # here. See caddy/Dockerfile.
+    build:
+      context: ./caddy
+    image: appstore-caddy:rfc2136
     container_name: caddy-prod
     environment:
       APP_HOSTNAME: ${APP_HOSTNAME:?APP_HOSTNAME is required}
       ACME_CA_URL: ${ACME_CA_URL:-https://certificates.dhbw.cloud/directory}
       ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+      # TSIG credentials for the dns-01 challenge, from the zone's TLS
+      # certificates page in the self-service UI.
+      DNS_TSIG_KEY_NAME: ${DNS_TSIG_KEY_NAME:?DNS_TSIG_KEY_NAME is required}
+      DNS_TSIG_KEY_ALG: ${DNS_TSIG_KEY_ALG:-hmac-sha512}
+      DNS_TSIG_KEY: ${DNS_TSIG_KEY:?DNS_TSIG_KEY is required}
+      DNS_SERVER: ${DNS_SERVER:-ns.cloud-ns.dhbw-mannheim.de.:53}
     ports:
       - "80:80"
       - "443:443"
