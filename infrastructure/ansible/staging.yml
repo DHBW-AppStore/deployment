@@ -103,7 +103,12 @@
 
     - name: Pull alle Images
       ansible.builtin.shell:
-        cmd: docker compose -f docker-compose.staging.yml pull
+        # --ignore-buildable überspringt Dienste mit build:-Abschnitt. Ohne das
+        # versucht compose auch appstore-caddy:rfc2136 zu ziehen, das nur lokal
+        # gebaut wird und in keiner Registry liegt - der Pull scheitert und
+        # bricht das Playbook an dieser Stelle ab, noch bevor der Stack
+        # überhaupt neu gestartet wird.
+        cmd: docker compose -f docker-compose.staging.yml pull --ignore-buildable
         chdir: "{{ project_root }}"
       changed_when: true
       async: 600
@@ -119,6 +124,11 @@
         project_src: "{{ project_root }}"
         files: ["docker-compose.staging.yml"]
         pull: never
+        # Caddy wird gebaut statt gezogen (DNS-Modul einkompiliert). "always"
+        # statt der Vorgabe, damit eine Änderung am Caddyfile oder Dockerfile
+        # sicher im Image landet - die Layer sind gecacht, also kostet es nach
+        # dem ersten Bau kaum Zeit.
+        build: always
         state: present
       register: compose_output
 
