@@ -187,6 +187,38 @@ follows this shape:
 `SSH_PRIVATE_KEY` — an **unencrypted** private key. Terraform registers its derived public half as
 the OpenStack keypair, so there is no separate "key pair" name to keep in sync.
 
+`STAGING_ENV_FILE` holds the stack's entire `.env` as one secret. Ansible writes it to the VM
+verbatim, so it is runtime configuration rather than CI configuration.
+
+### The staging `.env`
+
+Fields written as `${VAR:?…}` in `docker-compose.staging.yml` abort `compose up` when unset **or
+empty**, so the stack refuses to start half-configured:
+
+| Group | Fields |
+|---|---|
+| URLs | `APP_HOSTNAME`, `APP_BASE_URL`, `CORS_ORIGINS`, `VITE_APP_URL`, `VITE_API_URL`, `VITE_KEYCLOAK_URL` |
+| TLS | `ACME_EMAIL`, `DNS_TSIG_KEY_NAME`, `DNS_TSIG_KEY` |
+| Backend | `SECRET_KEY`, `CREDENTIAL_ENCRYPTION_KEY`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` |
+| Keycloak | `KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_DB_USER`, `KEYCLOAK_DB_PASSWORD`, `KEYCLOAK_DB_NAME` |
+| Broker | `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
+| TF state | `TFSTATE_DB_USER`, `TFSTATE_DB_PASSWORD`, `TFSTATE_DB_NAME` |
+| GHCR | `GIT_ACCESS_TOKEN` (and `GIT_USER`, which the playbook reads directly and defaults to `x`) |
+
+Everything else carries a `:-` default and can be omitted. Two of those defaults are DHBW-specific
+and worth knowing about: `ACME_CA_URL` points at HARICA, and `DNS_SERVER` /`DNS_TSIG_KEY_ALG`
+describe the zone that answers the dns-01 challenge.
+
+`APP_HOSTNAME` must be a DNS name with a record pointing at the VM. ACME issues certificates for
+domains, never for bare addresses — there is no longer any `<VM-IP>` to substitute, and no
+self-signed fallback.
+
+**Do not define a key twice.** Compose takes the *last* occurrence, while the playbook's
+`grep … | head -n1` for `APP_BASE_URL` takes the *first*. A duplicated key therefore does not
+merely pick one value — it hands the containers and the Keycloak realm template two *different*
+ones, and the stack starts cleanly while the backend disagrees with its own realm about what URL
+it is served from.
+
 ### Notes / follow-ups
 
 - The Trivy scan is intentionally non-blocking; review its findings and remove
