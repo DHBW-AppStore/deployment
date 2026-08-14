@@ -161,6 +161,37 @@
       register: compose_output
       changed_when: true
 
+    # `up -d --build` baut Caddy neu, ersetzt den Container aber nicht, wenn
+    # sich nur die Image-ID geändert hat: Compose entscheidet darüber anhand der
+    # Service-Definition, und die bleibt gleich. Der Container läuft dann weiter
+    # auf dem vorigen Image, das kein Tag mehr trägt und irgendwann eingesammelt
+    # wird — danach lässt er sich nicht mehr starten.
+    #
+    # Deshalb der Vergleich statt eines pauschalen --force-recreate: das würde
+    # den Proxy bei jedem Deploy kurz aus dem Netz nehmen, auch wenn sich am
+    # Image nichts geändert hat.
+    - name: Prüfen, ob Caddy auf dem aktuellen Image läuft
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          tagged=$(docker image inspect appstore-caddy:rfc2136 \
+                   --format '{% raw %}{{.Id}}{% endraw %}')
+          running=$(docker inspect caddy-prod \
+                    --format '{% raw %}{{.Image}}{% endraw %}' 2>/dev/null || echo none)
+          [ "$tagged" = "$running" ] && echo current || echo stale
+        executable: /bin/bash
+        chdir: "{{ project_root }}"
+      register: caddy_image_state
+      changed_when: false
+
+    - name: Caddy auf das neu gebaute Image heben
+      ansible.builtin.command:
+        cmd: >-
+          docker compose -f docker-compose.staging.yml
+          up -d --force-recreate --no-deps caddy
+        chdir: "{{ project_root }}"
+      when: caddy_image_state.stdout == "stale"
+
     # Migrations live OUTSIDE the compose file on purpose: a previous
     # backend-migrate init container buried failure stderr inside the
     # compose JSON. Running alembic as its own playbook step surfaces
