@@ -15,10 +15,20 @@
 #
 # On a Caddy upgrade this has to be rebuilt, and the module has to support the
 # new version - the one real cost of compiling a plugin in.
-FROM caddy:2-builder AS builder
+# Versions are pinned rather than floating. caddy:2-* is any 2.x, and the
+# plugin without a version resolves to whatever is newest at build time, so two
+# builds weeks apart produce different images without a line changing here.
+#
+# That costs more than reproducibility. The deploy rebuilds on the VM, and a
+# rebuild whose output differs moves the tag to a new image while the running
+# container still points at the old one - which then gets collected. Compose
+# can no longer resolve the container's image and aborts before it can replace
+# it, so the container stays stranded and every later run fails the same way.
+# It happened once here.
+FROM caddy:2.11.4-builder AS builder
 
-RUN xcaddy build --with github.com/caddy-dns/rfc2136
+RUN xcaddy build v2.11.4 --with github.com/caddy-dns/rfc2136@v1.0.0
 
-FROM caddy:2-alpine
+FROM caddy:2.11.4-alpine
 
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
