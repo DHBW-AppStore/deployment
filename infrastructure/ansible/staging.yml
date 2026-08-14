@@ -136,18 +136,30 @@
         chdir: "{{ project_root }}"
       changed_when: false
 
+    # Ein expliziter Befehl statt community.docker.docker_compose_v2, aus zwei
+    # Gründen 
+    #
+    # Erstens verschluckt das Modul Fehler: es liest den Zustand über
+    # `compose images --format json` und wertet nur stdout aus. Bricht Compose
+    # ab, steht die Meldung auf stderr und das Modul meldet stattdessen
+    # "Expecting value: line 1 column 1".
+    #
+    # Zweitens baut es in einem eigenen Schritt vor dem Start. Buildx vergibt
+    # dabei jedes Mal eine neue Image-ID (die Provenance-Manifeste tragen
+    # Zeitstempel), das Tag wandert mit, und die alte ID wird entsorgt — obwohl
+    # der laufende caddy-prod noch auf sie zeigt. Der anschließende
+    # Zustandsabruf findet dieses Image nicht mehr und bricht ab, bevor `up`
+    # den Container ersetzen kann. Der Container bleibt damit dauerhaft auf
+    # einer toten ID stehen und jeder weitere Lauf scheitert genauso.
+    #
+    # `up -d --build` baut und ersetzt in einem Zug, also bleibt kein Container
+    # auf einem entsorgten Image zurück.
     - name: Start the application with Docker Compose
-      community.docker.docker_compose_v2:
-        project_src: "{{ project_root }}"
-        files: ["docker-compose.staging.yml"]
-        pull: never
-        # Caddy wird gebaut statt gezogen (DNS-Modul einkompiliert). "always"
-        # statt der Vorgabe, damit eine Änderung am Caddyfile oder Dockerfile
-        # sicher im Image landet - die Layer sind gecacht, also kostet es nach
-        # dem ersten Bau kaum Zeit.
-        build: always
-        state: present
+      ansible.builtin.command:
+        cmd: docker compose -f docker-compose.staging.yml up -d --build
+        chdir: "{{ project_root }}"
       register: compose_output
+      changed_when: true
 
     # Migrations live OUTSIDE the compose file on purpose: a previous
     # backend-migrate init container buried failure stderr inside the
@@ -183,6 +195,15 @@
       register: caddy_reload
       changed_when: caddy_reload.rc == 0
 
+    # `compose_output` ist jetzt die Ausgabe des up-Befehls, nicht mehr die
+    # Zustandsstruktur des Moduls. Für die Übersicht am Ende fragt dieser
+    # Schritt den Zustand deshalb selbst ab.
     - name: Status der Deployment anzeigen
-      ansible.builtin.debug:
-        var: compose_output
+      ansible.builtin.command:
+        cmd: docker compose -f docker-compose.staging.yml ps
+        chdir: "{{ project_root }}"
+      register: compose_ps
+      changed_when: false
+
+    - ansible.builtin.debug:
+        var: compose_ps.stdout_lines
