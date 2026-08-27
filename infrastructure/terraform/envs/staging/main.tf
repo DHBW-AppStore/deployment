@@ -23,6 +23,10 @@ module "vm" {
   network_name = "DHBWV6"
   connect_via  = "fixed_ipv6"
 
+  # Second interface so clients without IPv6 can reach the app. Ansible connects
+  # over IPv6 as before; only the A record is new.
+  secondary_network_name = "DHBWv4"
+
   # Referencing the resource rather than a bare name gives Terraform the
   # dependency, so the group and its rules exist before the instance is built.
   security_groups = ["default", openstack_networking_secgroup_v2.appstore_vm.name]
@@ -37,4 +41,18 @@ module "vm" {
 
 output "vm_ip" {
   value = module.vm.vm_ip
+}
+
+# The address the A record for APP_HOSTNAME points at.
+output "vm_ipv4" {
+  value = module.vm.secondary_ipv4
+}
+
+# Consumed by the Ansible step that writes the netplan config.
+output "vm_ipv4_gateway" {
+  value = module.vm.secondary_gateway_ipv4
+}
+
+output "vm_ipv4_mac" {
+  value = module.vm.secondary_mac
 }

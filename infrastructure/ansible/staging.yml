@@ -15,6 +15,45 @@
     seed_data: false
 
   pre_tasks:
+    # Das zweite Interface hängt Terraform an die laufende VM, konfiguriert ist
+    # es damit nicht - cloud-init läuft nur beim ersten Boot.
+    #
+    # Die eigene Routing-Tabelle ist nicht optional: Antworten von der
+    # IPv4-Adresse müssen über deren Gateway hinaus, sonst verwirft Neutrons
+    # Port-Security sie als gefälschte Absenderadresse.
+    - name: Netplan für das sekundäre IPv4-Interface schreiben
+      when: secondary_mac | default('') | length > 0
+      ansible.builtin.copy:
+        dest: /etc/netplan/60-secondary-ipv4.yaml
+        owner: root
+        group: root
+        mode: '0600'
+        content: |
+          network:
+            version: 2
+            ethernets:
+              secondary:
+                match:
+                  macaddress: "{{ secondary_mac }}"
+                dhcp4: true
+                dhcp4-overrides:
+                  use-routes: false
+                routes:
+                  - to: default
+                    via: "{{ secondary_gateway }}"
+                    table: 100
+                routing-policy:
+                  - from: "{{ secondary_ipv4 }}"
+                    table: 100
+      register: netplan_secondary
+
+    # Fasst nur das neue Interface an; die Verbindung dieses Playbooks läuft
+    # über IPv6 auf dem primären und bleibt bestehen.
+    - name: Netplan anwenden
+      when: netplan_secondary is changed
+      ansible.builtin.command: netplan apply
+      changed_when: true
+
     - name: Verzeichnis für App erstellen
       ansible.builtin.file:
         path: "{{ project_root }}"

@@ -41,6 +41,13 @@ variable "security_groups" {
   type = list(string)
 }
 
+# Second network for dual-stack, e.g. "DHBWv4" next to a DHBWV6 primary.
+# null = single-homed, which is what every existing caller gets.
+variable "secondary_network_name" {
+  type    = string
+  default = null
+}
+
 variable "metadata" {
   type = map(string)
 }

@@ -50,12 +50,75 @@ services:
       # actions/checkout and friends are fetched from github.com; Forgejo has
       # no marketplace of its own.
       FORGEJO__actions__DEFAULT_ACTIONS_URL: https://github.com
+    # Bound to the loopback interface, not published to the world. Caddy
+    # reaches Forgejo as `forgejo:3000` over the compose network below, and so
+    # do the runner's job containers - neither needs a published port. What
+    # remains is local access: an SSH tunnel to the VM, or a browser on the
+    # laptop in Phase 1.
+    #
+    # This is what makes the security group in envs/forgejo honest. Without the
+    # 127.0.0.1 prefix, Docker's own iptables rules publish the port on every
+    # interface and bypass the group entirely.
     ports:
-      - "3000:3000"
-      - "2222:22"
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:2222:22"
     volumes:
       - forgejo-data:/data
     networks: [forgejo]
+
+  # TLS termination. Only meaningful on the VM: in Phase 1 you reach Forgejo at
+  # http://forgejo:3000 directly and this service has nothing to do, so it sits
+  # behind a profile and stays out of a plain `docker compose up`.
+  #
+  #   docker compose --profile tls up -d
+  #
+  # Start it that way on the VM. infrastructure/ansible/forgejo.yml does.
+  caddy:
+    profiles: [tls]
+    # Built rather than pulled: the stock image has no DNS provider modules,
+    # and dns-01 is the only challenge type available on a host whose 80 and
+    # 443 are campus-restricted. See caddy/Dockerfile.
+    build:
+      context: ./caddy
+    image: forgejo-caddy:rfc2136
+    container_name: forgejo-caddy
+    depends_on: [forgejo]
+    # No :? guards on any of these, for the same reason the runner's token has
+    # none: Compose interpolates every service before it selects which ones to
+    # start, so a required-variable guard here would also block a plain
+    # `docker compose up` in the Phase 1 local setup, where caddy is not even
+    # meant to run.
+    #
+    # infrastructure/ansible/forgejo.yml checks the values instead, on the host
+    # where they actually have to be present.
+    environment:
+      # Must match the host part of FORGEJO_ROOT_URL - see caddy/Caddyfile.
+      FORGEJO_HOSTNAME: ${FORGEJO_HOSTNAME:-}
+      ACME_CA_URL: ${ACME_CA_URL:-https://certificates.dhbw.cloud/directory}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      # TSIG credentials for the dns-01 challenge, from the zone's TLS
+      # certificates page in the self-service UI.
+      DNS_TSIG_KEY_NAME: ${DNS_TSIG_KEY_NAME:-}
+      DNS_TSIG_KEY_ALG: ${DNS_TSIG_KEY_ALG:-hmac-sha512}
+      DNS_TSIG_KEY: ${DNS_TSIG_KEY:-}
+      DNS_SERVER: ${DNS_SERVER:-ns.cloud-ns.dhbw-mannheim.de.:53}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Issued certificates and the ACME account key. Losing this volume means
+      # re-issuing on every deploy, which runs into the CA's rate limits - it
+      # must persist across redeploys.
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [forgejo]
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   runner:
     image: code.forgejo.org/forgejo/runner:6
@@ -109,6 +172,8 @@ volumes:
   db-data:
   forgejo-data:
   runner-data:
+  caddy-data:
+  caddy-config:
   # Survives job containers; see the note in runner/config.yml.
   tf-state:
     name: tf-state
