@@ -46,6 +46,7 @@
                   - from: "{{ secondary_ipv4 }}"
                     table: 100
       register: netplan_secondary
+      tags: [network]
 
     # Fasst nur das neue Interface an; die Verbindung dieses Playbooks läuft
     # über IPv6 auf dem primären und bleibt bestehen.
@@ -53,6 +54,7 @@
       when: netplan_secondary is changed
       ansible.builtin.command: netplan apply
       changed_when: true
+      tags: [network]
 
     - name: Verzeichnis für App erstellen
       ansible.builtin.file:

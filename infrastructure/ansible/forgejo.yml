@@ -55,6 +55,7 @@
                   - from: "{{ secondary_ipv4 }}"
                     table: 100
       register: netplan_secondary
+      tags: [network]
 
     # Touches only the new interface; this playbook's own connection runs over
     # IPv6 on the primary one and survives.
@@ -62,6 +63,7 @@
       when: netplan_secondary is changed
       ansible.builtin.command: netplan apply
       changed_when: true
+      tags: [network]
 
     # The volume has to be mounted BEFORE Docker is installed. Laying it over
     # an already populated /var/lib/docker hides the existing images and

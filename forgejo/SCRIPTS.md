@@ -118,6 +118,34 @@ cd deployment/forgejo && docker compose down
 Without `-v`, so the volumes survive. Keep them until you are sure nothing was
 left behind; `docker compose down -v` is the irreversible step.
 
+## 5. Optional: make the host reachable over IPv4
+
+The VM sits on DHBWV6, so it answers only over IPv6 — from a network without
+it, the forge is simply unreachable. `03-add-ipv4.sh` attaches a second
+interface on DHBWv4 and configures it:
+
+```bash
+export OS_CLOUD=newstack
+SSH_KEY=~/.ssh/<key> ./03-add-ipv4.sh
+```
+
+It takes the public key from the Terraform state rather than the environment,
+because a key that differs even in its comment would queue the VM for
+replacement.
+
+The plan is checked before it is applied and the script refuses to continue if
+it destroys or replaces anything. The instance is meant to survive — the
+interface is attached to the running VM rather than added as a second `network`
+block, which is what would force a rebuild.
+
+Ansible runs with `--tags network`, so only the two netplan tasks execute; the
+compose stack is not touched and the forge keeps running.
+
+Afterwards, add an **A** record for the same hostname next to the existing AAAA
+one. Both belong to the same name and clients pick whichever family they have.
+The certificate needs no attention — dns-01 does not care how the host is
+reachable.
+
 ## If it stops
 
 The message names the cause. The three that come up most:
