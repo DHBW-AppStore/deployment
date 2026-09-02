@@ -35,7 +35,9 @@ module "vm" {
   # dependency, so the group and its rules exist before the instance is built.
   security_groups = ["default", openstack_networking_secgroup_v2.appstore_vm.name]
 
-  docker_data_volume_size_gb = 0
+  # The named volumes under /var/lib/docker hold both databases, so this also makes
+  # them survive a replacement of the instance.
+  docker_data_volume_size_gb = 50
 
   metadata = {
     env  = "staging"

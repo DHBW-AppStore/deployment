@@ -13,6 +13,9 @@
     # Hand läuft: ein Deploy fasst keine Anwendungsdaten an, solange es nicht
     # ausdrücklich verlangt wird.
     seed_data: false
+    # Cinder-Volume aus envs/staging. "" heißt, die VM hat keins und
+    # /var/lib/docker bleibt auf der Root-Disk.
+    docker_data_device: /dev/vdb
 
   pre_tasks:
     # Das zweite Interface hängt Terraform an die laufende VM, konfiguriert ist
@@ -133,6 +136,52 @@
         state: restarted
         daemon_reload: true
       tags: [network]
+
+    # Das Volume muss hängen, bevor Docker dort Daten anlegt. Über ein
+    # gefülltes /var/lib/docker gelegt, verschwinden Images, Container und
+    # benannte Volumes für den Daemon, ohne Fehlermeldung.
+    - name: Datenvolume vorhanden?
+      ansible.builtin.stat:
+        path: "{{ docker_data_device }}"
+      register: data_device
+      when: docker_data_device | length > 0
+
+    - name: Abbrechen, wenn das erwartete Volume fehlt
+      ansible.builtin.fail:
+        msg: >-
+          {{ docker_data_device }} existiert nicht. Entweder wurde die VM ohne
+          docker_data_volume_size_gb gebaut - dann docker_data_device auf ""
+          setzen - oder das Volume hängt unter anderem Namen. Vorhanden:
+          {{ ansible_devices.keys() | list | join(', ') }}
+      when:
+        - docker_data_device | length > 0
+        - not data_device.stat.exists
+
+    # force: no ist die tragende Zeile. Ohne sie formatiert der nächste
+    # Playbook-Lauf das Volume neu und löscht beide Datenbanken.
+    - name: Dateisystem auf dem Datenvolume anlegen
+      community.general.filesystem:
+        fstype: ext4
+        dev: "{{ docker_data_device }}"
+        force: no
+      when: docker_data_device | length > 0
+
+    # Über die UUID statt /dev/vdb, weil Gerätenamen sich beim Booten
+    # verschieben können, sobald ein zweites Volume dazukommt.
+    - name: UUID des Datenvolumes lesen
+      ansible.builtin.command: blkid -s UUID -o value {{ docker_data_device }}
+      register: data_uuid
+      changed_when: false
+      when: docker_data_device | length > 0
+
+    - name: Datenvolume unter /var/lib/docker einhängen
+      ansible.posix.mount:
+        path: /var/lib/docker
+        src: "UUID={{ data_uuid.stdout | trim }}"
+        fstype: ext4
+        opts: defaults,noatime
+        state: mounted
+      when: docker_data_device | length > 0
 
     - name: Verzeichnis für App erstellen
       ansible.builtin.file:
