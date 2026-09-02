@@ -13,9 +13,9 @@
     # Hand läuft: ein Deploy fasst keine Anwendungsdaten an, solange es nicht
     # ausdrücklich verlangt wird.
     seed_data: false
-    # Cinder-Volume aus envs/staging. "" heißt, die VM hat keins und
-    # /var/lib/docker bleibt auf der Root-Disk.
-    docker_data_device: /dev/vdb
+    # Muss zu docker_data_volume_size_gb in envs/staging passen: "" solange dort
+    # 0 steht, /dev/vdb sobald wieder ein Volume angelegt wird.
+    docker_data_device: ""
 
   pre_tasks:
     # Das zweite Interface hängt Terraform an die laufende VM, konfiguriert ist
