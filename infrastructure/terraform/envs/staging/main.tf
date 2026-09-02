@@ -35,9 +35,14 @@ module "vm" {
   # dependency, so the group and its rules exist before the instance is built.
   security_groups = ["default", openstack_networking_secgroup_v2.appstore_vm.name]
 
-  # The named volumes under /var/lib/docker hold both databases, so this also makes
-  # them survive a replacement of the instance.
-  docker_data_volume_size_gb = 50
+  # Belongs at 50, the way the Forgejo host has it: the named volumes under
+  # /var/lib/docker hold both databases, and a volume also survives a
+  # replacement of the instance.
+  #
+  # Held at 0 because the first attempt hung in "creating" and made every apply
+  # wait out its ten-minute timeout. Raise it once Cinder hands out volumes
+  # again.
+  docker_data_volume_size_gb = 0
 
   metadata = {
     env  = "staging"
