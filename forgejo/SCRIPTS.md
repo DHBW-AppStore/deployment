@@ -125,18 +125,33 @@ it, the forge is simply unreachable. `03-add-ipv4.sh` attaches a second
 interface on DHBWv4 and configures it:
 
 ```bash
+cd deployment/forgejo
 export OS_CLOUD=newstack
 SSH_KEY=~/.ssh/<key> ./03-add-ipv4.sh
+```
+
+`OS_CLOUD` names an entry in `~/.config/openstack/clouds.yaml`. If you have
+several and are unsure which project holds this VM, ask before applying —
+credentials for the wrong project make Terraform miss the resources in the
+state and plan to build a second VM beside the first:
+
+```bash
+openstack --os-cloud newstack server show ci-dhbw-appstore
 ```
 
 It takes the public key from the Terraform state rather than the environment,
 because a key that differs even in its comment would queue the VM for
 replacement.
 
-The plan is checked before it is applied and the script refuses to continue if
-it destroys or replaces anything. The instance is meant to survive — the
-interface is attached to the running VM rather than added as a second `network`
-block, which is what would force a rebuild.
+**What the plan should say.** Two resources to add — the port and the interface
+attachment — and `0 to destroy`. The script reads the plan back before applying
+it and stops on anything that would be destroyed or replaced, so a bad plan
+never reaches the confirmation prompt.
+
+That check guards the assumption the whole approach rests on: the interface is
+attached to the running VM rather than added as a second `network` block, which
+is what would force a rebuild. If the script does stop there, keep the output —
+the assumption did not hold, and nothing has been changed yet.
 
 Ansible runs with `--tags network`, so only the two netplan tasks execute; the
 compose stack is not touched and the forge keeps running.
@@ -157,6 +172,8 @@ The message names the cause. The three that come up most:
 | `<host> does not resolve` | the DNS record from step 2.1 is missing or has not propagated |
 | `cannot reach ubuntu@… over SSH` | wrong `SSH_KEY`, or you are not on the campus network |
 | `FORGEJO_ROOT_URL is still the local Phase 1 value` | `.env` was not switched over in step 2.3 |
+| `this plan destroys or replaces resources` | step 5 only. Do not work around it — post the plan instead |
+| `could not read the public key from state` | step 5 only. Export `TF_VAR_ssh_public_key` with the key the VM was built with |
 
 Re-running after a fix is safe: the playbook is idempotent, the account is only
 created when none exists, and the token is only issued when `.env` has none.
