@@ -56,6 +56,84 @@
       changed_when: true
       tags: [network]
 
+    # Die Regel oben erfasst nur Antworten, die der Host selbst erzeugt - darum
+    # funktioniert SSH und ein veröffentlichter Port nicht: Docker leitet die
+    # Anfrage per DNAT weiter, bevor geroutet wird, die Antwort trägt also noch
+    # die Adresse des Containers als Absender und die Regel greift nicht. Sie
+    # geht dann über das primäre Interface hinaus, mit einer Adresse, die dieser
+    # Port nicht führen darf, und Neutron verwirft sie. Die Verbindung zu
+    # markieren statt die Adresse zu prüfen deckt beide Fälle ab.
+    #
+    # Ein Skript statt des iptables-Moduls, weil die Regeln einen Neustart
+    # überstehen müssen. mangle verwaltet Docker nicht, es kollidiert also
+    # nichts mit dessen Ketten.
+    - name: Connmark-Skript installieren
+      ansible.builtin.copy:
+        dest: /usr/local/sbin/secondary-ipv4-marks.sh
+        owner: root
+        group: root
+        mode: '0755'
+        content: |
+          #!/bin/sh
+          set -eu
+
+          iface=$(ip -o -4 addr show \
+            | awk '$4 ~ /^{{ secondary_ipv4 }}\// {print $2; exit}')
+          [ -n "$iface" ] || exit 0
+
+          add() {
+            iptables -t mangle -C "$@" 2>/dev/null || iptables -t mangle -A "$@"
+          }
+
+          # Entfernt eine frühere Fassung der Restore-Regel ohne Bedingung.
+          iptables -t mangle -D PREROUTING -j CONNMARK --restore-mark \
+            2>/dev/null || true
+
+          add PREROUTING -i "$iface" -m conntrack --ctstate NEW \
+            -j CONNMARK --set-mark 100
+
+          # Nie auf dem sekundären Interface selbst. Wäre auch die Anfrage
+          # markiert, ginge sie in die Tabelle unten statt weiter zum Container.
+          add PREROUTING ! -i "$iface" -j CONNMARK --restore-mark
+          add OUTPUT -j CONNMARK --restore-mark
+
+          # ip rule gibt die Marke hexadezimal aus, daher 0x64.
+          ip rule show | grep -q 'fwmark 0x64 lookup 100' \
+            || ip rule add fwmark 100 table 100 priority 32764
+      register: marks_script
+      tags: [network]
+
+    - name: Unit installieren, die die Marken beim Booten neu setzt
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/secondary-ipv4-marks.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Connection marks for the secondary IPv4 interface
+          After=network-online.target docker.service
+          Wants=network-online.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/usr/local/sbin/secondary-ipv4-marks.sh
+
+          [Install]
+          WantedBy=multi-user.target
+      register: marks_unit
+      tags: [network]
+
+    - name: Aktivieren und ausführen
+      when: marks_script is changed or marks_unit is changed
+      ansible.builtin.systemd:
+        name: secondary-ipv4-marks.service
+        enabled: true
+        state: restarted
+        daemon_reload: true
+      tags: [network]
+
     - name: Verzeichnis für App erstellen
       ansible.builtin.file:
         path: "{{ project_root }}"

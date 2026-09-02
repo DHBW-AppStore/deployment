@@ -25,7 +25,11 @@ module "vm" {
 
   # Second interface so clients without IPv6 can reach the app. Ansible connects
   # over IPv6 as before; only the A record is new.
+  #
+  # The subnet is named because DHBWv4 has two, and the address has to come from
+  # the one whose gateway Ansible routes through.
   secondary_network_name = "DHBWv4"
+  secondary_subnet_name  = "DHBWv4-188"
 
   # Referencing the resource rather than a bare name gives Terraform the
   # dependency, so the group and its rules exist before the instance is built.

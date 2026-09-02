@@ -86,6 +86,14 @@ variable "secondary_network_name" {
   default     = "DHBWv4"
 }
 
+# DHBWv4 has two IPv4 subnets, The -188 one
+# is where the platform's Apps land, so the forge keeps them company.
+variable "secondary_subnet_name" {
+  description = "IPv4 subnet within secondary_network_name."
+  type        = string
+  default     = "DHBWv4-188"
+}
+
 variable "connect_via" {
   description = "Which address Ansible connects to. See modules/openstack_vm/variables.tf."
   type        = string

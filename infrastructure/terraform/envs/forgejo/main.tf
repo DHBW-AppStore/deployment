@@ -23,6 +23,7 @@ module "vm" {
 
   # Second interface so the forge is reachable without IPv6.
   secondary_network_name = var.secondary_network_name
+  secondary_subnet_name  = var.secondary_subnet_name
 
   # Referencing the resource rather than a bare name gives Terraform the
   # dependency, so the group and its rules exist before the instance is built.

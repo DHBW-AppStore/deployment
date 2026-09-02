@@ -130,6 +130,9 @@ jobs:
         run: |
           terraform apply tfplan
           echo "VM_IP=$(terraform output -raw vm_ip)" >> "$GITHUB_ENV"
+          echo "VM_IPV4=$(terraform output -raw vm_ipv4)" >> "$GITHUB_ENV"
+          echo "VM_IPV4_GATEWAY=$(terraform output -raw vm_ipv4_gateway)" >> "$GITHUB_ENV"
+          echo "VM_IPV4_MAC=$(terraform output -raw vm_ipv4_mac)" >> "$GITHUB_ENV"
 
       - name: Generate Ansible Inventory
         if: github.event.inputs.mode == 'apply'
@@ -163,6 +166,9 @@ jobs:
           ansible-playbook -i inventory.ini \
             --private-key ~/.ssh/openstack-key \
             -e seed_data=${{ github.event.inputs.seed }} \
+            -e "secondary_ipv4=${VM_IPV4}" \
+            -e "secondary_gateway=${VM_IPV4_GATEWAY}" \
+            -e "secondary_mac=${VM_IPV4_MAC}" \
             staging.yml
         env:
           ANSIBLE_HOST_KEY_CHECKING: 'False'

@@ -48,6 +48,13 @@ variable "secondary_network_name" {
   default = null
 }
 
+# Required when the secondary network has more than one IPv4 subnet, as DHBWv4
+# does. Leaving it null there fails the plan rather than picking one.
+variable "secondary_subnet_name" {
+  type    = string
+  default = null
+}
+
 variable "metadata" {
   type = map(string)
 }

@@ -65,6 +65,84 @@
       changed_when: true
       tags: [network]
 
+    # The routing-policy rule above only covers replies the host generates
+    # itself, which is why SSH works and a published port does not: Docker DNATs
+    # the request before the routing decision, so the reply still carries the
+    # container's own address as its source and the rule misses it. It then leaves
+    # over the primary interface with an address that port may not use, and
+    # Neutron drops it. Marking the connection instead of matching the address
+    # covers both cases.
+    #
+    # A script rather than the iptables module, because the rules have to come
+    # back after a reboot. mangle is a table Docker does not manage, so nothing
+    # collides with its chains.
+    - name: Install the connmark script
+      ansible.builtin.copy:
+        dest: /usr/local/sbin/secondary-ipv4-marks.sh
+        owner: root
+        group: root
+        mode: '0755'
+        content: |
+          #!/bin/sh
+          set -eu
+
+          iface=$(ip -o -4 addr show \
+            | awk '$4 ~ /^{{ secondary_ipv4 }}\// {print $2; exit}')
+          [ -n "$iface" ] || exit 0
+
+          add() {
+            iptables -t mangle -C "$@" 2>/dev/null || iptables -t mangle -A "$@"
+          }
+
+          # Removes an earlier unqualified form of the restore rule below.
+          iptables -t mangle -D PREROUTING -j CONNMARK --restore-mark \
+            2>/dev/null || true
+
+          add PREROUTING -i "$iface" -m conntrack --ctstate NEW \
+            -j CONNMARK --set-mark 100
+
+          # Never on the secondary interface itself. Marking the request too
+          # would send it to the table below instead of on to the container.
+          add PREROUTING ! -i "$iface" -j CONNMARK --restore-mark
+          add OUTPUT -j CONNMARK --restore-mark
+
+          # ip rule prints the mark in hex, hence 0x64.
+          ip rule show | grep -q 'fwmark 0x64 lookup 100' \
+            || ip rule add fwmark 100 table 100 priority 32764
+      register: marks_script
+      tags: [network]
+
+    - name: Install the unit that reapplies the marks at boot
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/secondary-ipv4-marks.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Connection marks for the secondary IPv4 interface
+          After=network-online.target docker.service
+          Wants=network-online.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/usr/local/sbin/secondary-ipv4-marks.sh
+
+          [Install]
+          WantedBy=multi-user.target
+      register: marks_unit
+      tags: [network]
+
+    - name: Enable and run it
+      when: marks_script is changed or marks_unit is changed
+      ansible.builtin.systemd:
+        name: secondary-ipv4-marks.service
+        enabled: true
+        state: restarted
+        daemon_reload: true
+      tags: [network]
+
     # The volume has to be mounted BEFORE Docker is installed. Laying it over
     # an already populated /var/lib/docker hides the existing images and
     # containers from the daemon — they stay on the root disk, still occupy
