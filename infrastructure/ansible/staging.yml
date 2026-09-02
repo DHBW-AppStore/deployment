@@ -382,6 +382,30 @@
       register: migration_result
       changed_when: "'Running upgrade' in migration_result.stdout"
 
+    # Das Gegenstück zu keycloak-wait im Makefile: bei leerer Datenbank startet
+    # Keycloak erst Quarkus, importiert den Realm und bindet den Listener zuletzt.
+    # Ein Seed davor scheitert mit "Connection refused".
+    #
+    # Ein TCP-Verbindungsversuch statt einer HTTP-Anfrage, weil schon das
+    # gebundene Socket das gesuchte Signal ist - der Makefile muss dafür
+    # Keycloaks 403 auf /realms/master gesondert behandeln.
+    - name: Auf Keycloak warten
+      when: seed_data | bool
+      ansible.builtin.shell: |
+        set -eu
+        cd {{ project_root }}
+        for _ in $(seq 1 60); do
+          if docker compose -f docker-compose.staging.yml exec -T backend \
+               python -c "import socket; socket.create_connection(('keycloak', 8080), 2)" \
+               >/dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "Keycloak nimmt nach fuenf Minuten keine Verbindungen an" >&2
+        exit 1
+      changed_when: false
+
     # Seeding läuft nach den Migrationen, weil das Skript in die Tabellen
     # schreibt, die dort erst entstehen. Es legt Keycloak-Benutzer an (Profs,
     # Studierende, ein Admin — alle mit Passwort 1234) und füllt Kurse, Apps
