@@ -89,8 +89,13 @@ jobs:
           trivy config --severity HIGH,CRITICAL \
             --format sarif --output trivy-iac.sarif infrastructure/terraform
 
+      # continue-on-error to match the scan above, which is deliberately
+      # non-blocking for staging. Storing its report was the one step that could
+      # still fail the job: an artifact service answering 500 stopped the deploy
+      # before Terraform had run at all.
       - name: Upload Trivy SARIF artifact
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
           name: trivy-iac-staging
