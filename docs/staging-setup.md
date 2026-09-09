@@ -158,5 +158,4 @@ die Entwicklungsumgebung.
 
 Kein Produktivsystem. Die Datenbank enthält Seed-Daten, die Nutzer haben ein
 bekanntes Passwort, und `/var/lib/docker` liegt auf der Root-Disk der Instanz —
-eine Neuerstellung der VM nimmt beide Datenbanken mit. Für das produktive Setup
-siehe `prod-setup.md`.
+eine Neuerstellung der VM nimmt beide Datenbanken mit. 
