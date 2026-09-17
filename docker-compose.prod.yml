@@ -251,8 +251,10 @@ services:
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?KEYCLOAK_CLIENT_SECRET is required}
       KEYCLOAK_ENABLED: ${KEYCLOAK_ENABLED:-true}
 
-      # Git
+      # Git — the GitHub App is tried first; without it the backend uses the token.
       GIT_ACCESS_TOKEN: ${GIT_ACCESS_TOKEN:?GIT_ACCESS_TOKEN is required}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
 
       # CORS
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
