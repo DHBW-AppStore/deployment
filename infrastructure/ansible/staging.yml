@@ -317,21 +317,7 @@
     # ihn über den Reload-Schritt am Playbook-Ende neu — validiert und ohne
     # Unterbrechung, statt den Container wegzuwerfen.
 
-    - name: Log in to GHCR using credentials from the deployed .env
-      ansible.builtin.shell:
-        cmd: |
-          set -euo pipefail
-          env_file="{{ project_root }}/.env"
-          token=$(grep -E '^GIT_ACCESS_TOKEN=' "$env_file" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\042\047\r' || true)
-          user=$(grep -E '^GIT_USER=' "$env_file" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\042\047\r' || true)
-          if [ -z "$token" ]; then
-            echo "no GIT_ACCESS_TOKEN in $env_file - skipping GHCR login"
-            exit 0
-          fi
-          echo "$token" | docker login ghcr.io --username "${user:-x}" --password-stdin
-        executable: /bin/bash
-      changed_when: true
-
+    # Ohne Anmeldung: die Images der Organisation sind öffentlich.
     - name: Pull alle Images
       ansible.builtin.shell:
         # --ignore-buildable überspringt Dienste mit build:-Abschnitt. Ohne das
@@ -345,7 +331,9 @@
       async: 600
       poll: 30
 
-    - name: GHCR credentials aus root-Store entfernen
+    # Räumt Zugangsdaten weg, die frühere Läufe mit GHCR-Anmeldung hinterlassen
+    # haben. Ohne Anmeldung entsteht die Datei nicht mehr neu.
+    - name: Zugangsdaten aus dem Root-Store entfernen
       ansible.builtin.file:
         path: /root/.docker/config.json
         state: absent
