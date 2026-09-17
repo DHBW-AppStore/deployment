@@ -340,8 +340,10 @@ services:
       # Worker uses one schema per deployment (deployment_<uuid>).
       TFSTATE_DATABASE_URL: postgresql://${TFSTATE_DB_USER}:${TFSTATE_DB_PASSWORD}@postgres-tfstate:5432/${TFSTATE_DB_NAME}?sslmode=disable
 
-      # Git
+      # Git — the GitHub App is tried first; without it the worker uses the token.
       GIT_ACCESS_TOKEN: ${GIT_ACCESS_TOKEN:?GIT_ACCESS_TOKEN is required}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
 
       # Application
       DEBUG: "False"
