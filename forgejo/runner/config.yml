@@ -3,8 +3,8 @@ log:
 
 runner:
   file: /data/.runner
-  # One deploy at a time. The staging backend is a *local* tfstate file with no
-  # locking, so two concurrent runs would corrupt it.
+  # One deploy at a time. The pg backend locks the state, but two concurrent
+  # runs would still fight over the same VM in Ansible and compose.
   capacity: 1
   timeout: 1h
   # Must match RUNNER_LABELS in docker-compose.yml. `deploy` is what the
