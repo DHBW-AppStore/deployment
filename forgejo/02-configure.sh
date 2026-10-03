@@ -134,6 +134,21 @@ ansible-playbook -i "$ansible_dir/inventory.forgejo.ini" \
   --private-key "$ssh_key" "$ansible_dir/forgejo.yml"
 
 # ---------------------------------------------------------------------------
+step "Terraform state database"
+# ---------------------------------------------------------------------------
+# envs/staging uses backend "pg". That backend creates its schema on first use
+# but not the database, so without this step the first deploy fails in init.
+psql_db() { remote "cd forgejo && docker compose exec -T db $*"; }
+
+if [ "$(psql_db "psql -U forgejo -tAc \"select 1 from pg_database where datname='terraform_state'\"" | tr -d '[:space:]')" = "1" ]; then
+  echo "    terraform_state already exists - skipping"
+else
+  psql_db "createdb -U forgejo terraform_state" \
+    || fail "could not create terraform_state - is the db service up? docker compose ps"
+  echo "    created terraform_state"
+fi
+
+# ---------------------------------------------------------------------------
 step "Admin account"
 # ---------------------------------------------------------------------------
 # -u 1000 because Forgejo refuses to run its CLI as root and `exec` defaults to
@@ -213,7 +228,9 @@ cat <<EOF
 
 Remaining, in the web UI:
   - push the deployment repo to this instance
-  - add the six workflow secrets under Settings -> Actions -> Secrets
+  - add the six workflow secrets under Settings -> Actions -> Secrets. PG_CONN_STR
+    is postgres://forgejo:<FORGEJO_DB_PASSWORD>@db:5432/terraform_state?sslmode=disable
+    - job containers join this stack's network, so "db" resolves there
   - create further accounts; give at least two people the admin flag, so a
     lost password does not mean going into the container
 EOF

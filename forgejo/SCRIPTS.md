@@ -83,8 +83,13 @@ SSH_KEY=~/.ssh/<key> ./02-configure.sh
 ```
 
 Checks the `.env`, that the hostname resolves and that SSH works, then runs the
-playbook, creates the first account if the instance is empty, issues a runner
-token and starts the runner. Ends with the HTTP status of the site.
+playbook, creates the `terraform_state` database, creates the first account if
+the instance is empty, issues a runner token and starts the runner. Ends with
+the HTTP status of the site.
+
+The database is needed because `envs/staging` keeps its state in Postgres. The
+`pg` backend creates its schema on first use but not the database, so without
+it the first deploy stops in `terraform init`.
 
 ## 4. Point your checkout at the new instance
 
