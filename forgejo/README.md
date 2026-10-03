@@ -135,12 +135,17 @@ Phase 2 is for.
   steps 3–9 above.
 - **`actions/upload-artifact@v3`, not v4.** v4 is known to misbehave on
   Gitea/Forgejo runners.
-- **tfstate lives in the `tf-state` docker volume**, not in the repo. `docker
-  compose down -v` destroys it and orphans the staging VM. Back it up before
-  tearing anything down:
+- **Two Terraform states, in two different places.** The staging state lives in
+  the `terraform_state` database on this stack's Postgres, schema `staging`
+  (`envs/staging/backend.tf`), so it sits in the `db-data` volume. `docker
+  compose down -v` destroys it and orphans the staging VM. The state for *this*
+  VM is a local file on the operator's machine,
+  `envs/forgejo/terraform.tfstate` — it cannot live here, because it describes
+  the machine that hosts the database. Back up both before tearing anything
+  down:
   ```bash
-  docker run --rm -v tf-state:/s -v "$PWD":/out alpine \
-    tar czf /out/tf-state-backup.tgz -C /s .
+  docker compose exec db pg_dump -U forgejo terraform_state > tf-state-backup.sql
+  cp ../infrastructure/terraform/envs/forgejo/terraform.tfstate ./forgejo-tfstate-backup
   ```
 
 ## Phase 2 (later)
