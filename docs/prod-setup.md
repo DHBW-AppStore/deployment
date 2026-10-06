@@ -23,6 +23,30 @@ Der App Store ist ein Web-System, in dem Studierende und Dozierende vorgefertigt
 
 Zugangsdaten für GitHub sind **optional**. Öffentliche App-Repositories werden ohne gelesen; für private installiert der Repo-Eigentümer die GitHub App dieser Installation (Schritt 2h).
 
+### Benötigte Ports
+
+**Eingehend** — mehr als diese drei muss die Firewall oder Security Group nicht durchlassen:
+
+| Port | Dienst | Wofür |
+|---|---|---|
+| 443/tcp | nginx | die Anwendung, `/api`, `/realms` und `/admin` laufen alle darüber |
+| 80/tcp | nginx | leitet mit 301 auf 443 um (`nginx/nginx.conf:16`); nur nötig, damit ein `http://`-Aufruf nicht ins Leere läuft |
+| 22/tcp | sshd | Administration. Nach Möglichkeit auf das eigene Netz einschränken |
+
+Alle übrigen Dienste veröffentlichen **keine** Ports: Postgres, RabbitMQ und Redis sind nur
+im Compose-Netz erreichbar. Datenbank- oder Broker-Ports von außen zu öffnen ist nicht nötig
+und sollte unterbleiben.
+
+**Ausgehend** muss die VM erreichen:
+
+| Ziel | Port | Wofür |
+|---|---|---|
+| `ghcr.io` | 443/tcp | die Service-Images |
+| `github.com`, `api.github.com` | 443/tcp | App-Repositories klonen, Versionen lesen |
+| OpenStack-Endpunkt (Keystone, Nova, Neutron, Glance, Cinder) | 443/tcp | der Worker rollt damit aus |
+| Mailserver | 465/tcp | nur bei `SMTP_ENABLED=true` |
+| Paketquellen (`archive.ubuntu.com`, `download.docker.com`) | 80/443 tcp | Schritt 0 |
+
 > [!NOTE]
 > `<VM-IP>` ist in dieser Anleitung ein Platzhalter — überall durch die echte IP ersetzen (z. B. `141.72.12.185`). In Bash würde `<VM-IP>` als Redirect interpretiert und mit `syntax error near unexpected token` brechen.
 
