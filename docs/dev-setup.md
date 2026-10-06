@@ -10,11 +10,11 @@ Der App Store ist ein Web-System, in dem Studierende und Dozierende vorgefertigt
 | Docker Compose | v2 (`docker compose`, nicht `docker-compose`) | Über Docker Desktop bereits dabei |
 | Git | 2.x | |
 | Python 3 | 3.11+ | Wird einmalig zum Generieren des Fernet-Keys gebraucht |
-| GNU Make | Pflicht | Alle Schritte sind als `make`-Targets ausgelegt — wer kein Make hat, kann die zugrunde liegenden Befehle direkt aus dem [Makefile](./Makefile) ablesen |
+| GNU Make | Pflicht | Alle Schritte sind als `make`-Targets ausgelegt — wer kein Make hat, kann die zugrunde liegenden Befehle direkt aus dem [Makefile](../Makefile) ablesen |
 | Freie Ports | 5173, 8000, 8080, 5432, 5672, 15672, 6379, 5050, 55433 | Bei Konflikt den entsprechenden Port in der `.env` überschreiben (z. B. `KEYCLOAK_PORT=8180`) — die zugehörige `VITE_*_URL` ebenfalls anpassen |
 
 
-Ein GitHub Personal Access Token mit `repo`-Scope ist empfohlen. Ohne Token funktioniert das Setup, aber Deployments aus privaten App-Repos schlagen fehl.
+Zugangsdaten für GitHub braucht das Setup nicht. Öffentliche App-Repositories werden ohne gelesen; private erfordern die GitHub App dieser Installation (Schritt 2c).
 
 
 ## Schritt 1: Repository klonen
@@ -35,7 +35,7 @@ Alle weiteren Befehle werden aus `app-store/deployment` ausgeführt — dort lie
 Verzeichnislayout nach dem Klonen:
 
 ```
-appstore/
+app-store/
 ├── frontend/        # Vue 3 + Vite
 ├── backend/         # FastAPI + Alembic
 ├── worker/          # Celery + Terraform/Packer
@@ -82,15 +82,22 @@ KEYCLOAK_CLIENT_SECRET=changeme
 
 In Schritt 5 wird der echte Wert nachgetragen.
 
-### 2c. `GIT_ACCESS_TOKEN` (empfohlen)
+### 2c. Zugriff auf App-Repositories (optional)
 
-GitHub Personal Access Token mit `repo`-Scope. Anlegen unter: GitHub → Settings → Developer settings → Personal access tokens (classic) → Generate new token.
+Für öffentliche Repositories ist nichts einzutragen. Private brauchen eine GitHub App, die
+der Repo-Eigentümer auf seinem Repository installiert:
 
 ```
-GIT_ACCESS_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+GITHUB_APP_ID=<App-ID>
+GITHUB_APP_PRIVATE_KEY=<PEM, base64 in eine Zeile: base64 < app.private-key.pem | tr -d '\n'>
 ```
 
-Für reines Testen ohne private Repos darf der Wert leer bleiben.
+Lokal lässt sich dieselbe App verwenden wie auf dem Server — sie hat keinen Webhook und
+braucht deshalb keine erreichbare Adresse. Sinnvoll ist ein eigener privater Schlüssel für
+die Entwicklung; eine App kann mehrere haben.
+
+`GIT_ACCESS_TOKEN` bleibt für GitLab-Repositories und als Rückfall nutzbar, darf aber leer
+sein.
 
 ### 2d. `SMTP_*` (optional)
 
@@ -102,7 +109,7 @@ E-Mail-Benachrichtigungen (Approval-Workflow). Wenn nicht gebraucht, einfach `SM
 make dev-up
 ```
 
-Das startet zwölf Container: `frontend`, `backend`, `worker`, `keycloak`, `keycloak-postgres`, `postgres`, `postgres-test`, `postgres-tfstate`, `redis`, `rabbitmq`, `pgadmin`.
+Das startet elf Container: `frontend`, `backend`, `worker`, `keycloak`, `keycloak-postgres`, `postgres`, `postgres-test`, `postgres-tfstate`, `redis`, `rabbitmq`, `pgadmin`.
 
 Beim ersten Start dauert der Boot 1–3 Minuten (Image-Pull + Keycloak-Init). Bevor Schritt 4 läuft, sicherstellen dass Keycloak fertig ist:
 
@@ -116,6 +123,8 @@ Erwartete Zeilen:
 Listening on: http://0.0.0.0:8080
 ... started in XX.XXXs
 ```
+
+`Ctrl-C` beendet das Tail — `dev-logs-keycloak` folgt dem Log und kehrt von selbst nicht zurück.
 
 
 ## Schritt 4: Migrationen und Seed-Daten

@@ -21,7 +21,7 @@ Der App Store ist ein Web-System, in dem Studierende und Dozierende vorgefertigt
 | GNU Make | Pflicht | Alle Schritte sind als `make`-Targets ausgelegt — wer kein Make hat, kann die zugrunde liegenden Befehle direkt aus dem [Makefile](../Makefile) ablesen |
 | VM-IP | z. B. `203.0.113.42` | Die öffentliche IP, unter der die VM erreichbar ist |
 
-Ein GitHub Personal Access Token mit `repo`-Scope ist **Pflicht** — der Worker klont damit private App-Repos und das Backend verifiziert GitHub-Hooks.
+Zugangsdaten für GitHub sind **optional**. Öffentliche App-Repositories werden ohne gelesen; für private installiert der Repo-Eigentümer die GitHub App dieser Installation (Schritt 2h).
 
 > [!NOTE]
 > `<VM-IP>` ist in dieser Anleitung ein Platzhalter — überall durch die echte IP ersetzen (z. B. `141.72.12.185`). In Bash würde `<VM-IP>` als Redirect interpretiert und mit `syntax error near unexpected token` brechen.
@@ -169,12 +169,26 @@ KEYCLOAK_CLIENT_SECRET=changeme
 
 In Schritt 6 wird der echte Wert nachgetragen.
 
-### 2h. `GIT_ACCESS_TOKEN` (Pflicht)
+### 2h. Zugriff auf App-Repositories (optional)
 
-GitHub Personal Access Token mit `repo`-Scope. Wird vom Worker beim Klonen privater App-Repos und vom Backend für Hook-Verifikation verwendet. Anlegen unter: GitHub → Settings → Developer settings → Personal access tokens (classic) → Generate new token.
+Öffentliche Repositories brauchen keine Zugangsdaten. Für **private** registriert der
+Betreiber eine GitHub App — eine je Installation, damit kein Konto und kein Token zwischen
+Standorten geteilt werden muss. Der Repo-Eigentümer installiert sie dann auf seinem
+Repository; den Link zeigt der Wizard beim Hinzufügen der App an.
 
 ```
-GIT_ACCESS_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+GITHUB_APP_ID=<App-ID>
+GITHUB_APP_PRIVATE_KEY=<PEM, base64 in eine Zeile: base64 < app.private-key.pem | tr -d '\n'>
+```
+
+Die App braucht nur `Contents: Read-only`, der Webhook bleibt abgeschaltet. Details in
+[.env.staging.example](../.env.staging.example).
+
+`GIT_ACCESS_TOKEN` existiert weiterhin, aber nur noch für GitLab-Repositories und als
+Rückfall, wenn die App auf einem Repository nicht installiert ist:
+
+```
+GIT_ACCESS_TOKEN=
 ```
 
 ### 2i. URLs (Pflicht)
@@ -183,12 +197,17 @@ Alle URLs zeigen auf deine VM. nginx terminiert HTTPS auf 443 und routet `/api` 
 
 ```
 APP_BASE_URL=https://<VM-IP>
-CORS_ORIGINS=https://<VM-IP>
+CORS_ORIGINS=["https://<VM-IP>"]
 
 VITE_APP_URL=https://<VM-IP>
 VITE_API_URL=https://<VM-IP>/api
 VITE_KEYCLOAK_URL=https://<VM-IP>
 ```
+
+Die eckigen Klammern bei `CORS_ORIGINS` sind Pflicht: Das Backend liest das Feld als Liste,
+und dafür erwartet pydantic-settings JSON. Ohne sie bricht der Start mit
+`error parsing value for field "CORS_ORIGINS"` ab. Mehrere Origins werden
+kommagetrennt *innerhalb* der Klammern angegeben: `["https://a", "https://b"]`.
 
 ### 2j. `SMTP_*` (optional)
 
