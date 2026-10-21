@@ -52,6 +52,21 @@ step "terraform init"
 terraform -chdir="$env_dir" init -input=false
 
 # ---------------------------------------------------------------------------
+step "Check the login the guest step needs"
+# ---------------------------------------------------------------------------
+# Readable is not the same as accepted: SSH_KEY defaults to a key this VM was
+# rarely built with, and the mismatch would otherwise surface two steps later,
+# after the apply. Over the address from the state - the one the inventory
+# takes as well when no hostname argument is given.
+ssh_target=${1:-$(terraform -chdir="$env_dir" output -raw vm_ip)}
+ssh -i "$ssh_key" -o BatchMode=yes -o StrictHostKeyChecking=no \
+    -o ConnectTimeout=10 "ubuntu@$ssh_target" true 2>/dev/null \
+  || fail "cannot reach ubuntu@$ssh_target over SSH with $ssh_key.
+Set SSH_KEY to the private half of the keypair the VM was built with."
+
+echo "    login    ubuntu@$ssh_target"
+
+# ---------------------------------------------------------------------------
 step "terraform plan"
 # ---------------------------------------------------------------------------
 terraform -chdir="$env_dir" plan -input=false -out=tfplan
