@@ -121,8 +121,11 @@
         content: |
           [Unit]
           Description=Connection marks for the secondary IPv4 interface
-          After=network-online.target docker.service
+          After=network-online.target docker.service systemd-networkd.service
           Wants=network-online.target
+          # A networkd restart rebuilds the routing-policy rules from netplan
+          # and drops the fwmark rule with them. PartOf restarts this unit too.
+          PartOf=systemd-networkd.service
 
           [Service]
           Type=oneshot
@@ -134,8 +137,23 @@
       register: marks_unit
       tags: [network]
 
+    # PartOf alone leaves a gap: networkd reports itself started before it has
+    # finished reconfiguring the links, so the rule can be added and dropped
+    # again right after. The dispatcher runs once a link is routable.
+    - name: Install the dispatcher hook that reapplies the marks
+      ansible.builtin.copy:
+        dest: /etc/networkd-dispatcher/routable.d/50-secondary-ipv4-marks
+        owner: root
+        group: root
+        mode: '0755'
+        content: |
+          #!/bin/sh
+          exec /usr/local/sbin/secondary-ipv4-marks.sh
+      register: marks_hook
+      tags: [network]
+
     - name: Enable and run it
-      when: marks_script is changed or marks_unit is changed
+      when: marks_script is changed or marks_unit is changed or marks_hook is changed
       ansible.builtin.systemd:
         name: secondary-ipv4-marks.service
         enabled: true
